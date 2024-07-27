@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>翻译示例</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui/lib/theme-chalk/index.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui/lib/index.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            flex-basis: calc(20% - 10px); /* 每行5个 */
+            margin: 5px;
+            text-align: center;
+        }
+
+        p {
+            margin: 5px 0;
+        }
+
+        input[type="text"] {
+            width: 90%;
+            height: 30px;
+            padding: 5px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        span {
+            display: inline-block;
+            border-radius: 4px;
+            padding: 5px;
+            width: 100%;
+            height: 30px;
+            line-height: 30px;
+            text-align: left;
+            margin-bottom: 5px;
+        }
+
+        .custom-button {
+            background-color: #42b983;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-left: 10px;
+            margin-top: 15px;
+        }
+
+        .custom-button:hover {
+            background-color: #367c6b;
+        }
+
+        .custom-button:focus {
+            outline: none;
+        }
+
+        .index {
+            width: 30px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            margin-bottom: 10px;
+            justify-content: center;
+        }
+
+        .btn {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <button class="custom-button" @click="translateAll('baidu')" style="margin-left: 50px;">一键翻译（百度翻译）</button>
+        <button class="custom-button" @click="translateAll('youdao')">一键翻译（有道翻译）</button>
+        <button class="custom-button" @click="addInputGroup">添加</button>
+        <button class="custom-button" @click="toggleIndexFormat">切换序号格式</button>
+        <div class="container">
+            <div class="input-group" v-for="(group, index) in inputGroups" :key="group.id">
+                <div class="header">
+                    <h2 class="index">{{ startFromOne ? index + 1 : index }}</h2>
+                </div>
+                <p><span :id="'text' + group.id"></span></p>
+                <input type="text" :id="'input' + group.id" placeholder="输入内容...">
+                <br>
+                <div class="btn">
+                    <button class="custom-button" @click="translateText(group.id, 'baidu')">百度翻译</button>
+                    <button class="custom-button" @click="translateText(group.id, 'youdao')">有道翻译</button>
+                    <button class="custom-button" @click="clearText(group.id)">清空</button>
+                    <button class="custom-button" @click="removeInputGroup(group.id)">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                inputGroups: [
+                    { id: 1 },
+                    { id: 2 },
+                    { id: 3 },
+                    { id: 4 },
+                    { id: 5 }
+                ],
+                nextId: 6,
+                startFromOne: true // 默认从 1 开始
+            },
+            methods: {
+                async translateText(number, service, retryCount = 3) {
+                    const inputField = document.getElementById(`input${number}`);
+                    const textField = document.getElementById(`text${number}`);
+                    const query = inputField.value;
+                    const url = `http://localhost:5000/translate?q=${encodeURIComponent(query)}&service=${service}`;
+
+                    try {
+                        textField.innerText = "翻译中..."; // 设置翻译中状态
+                        console.log(`发送请求 ${number} 到 ${service}`);
+                        const response = await fetch(url);
+                        const data = await response.json();
+
+                        if (service === 'baidu' && data.trans_result) {
+                            textField.innerText = data.trans_result[0].dst;
+                        } else if (service === 'youdao' && data.translation) {
+                            textField.innerText = data.translation[0];
+                        } else {
+                            throw new Error("翻译失败");
+                        }
+                    } catch (error) {
+                        if (retryCount > 0) {
+                            console.warn(`翻译失败，重试中... (${3 - retryCount + 1}/3)`);
+                            await this.translateText(number, service, retryCount - 1);
+                        } else {
+                            console.error("Error:", error);
+                            console.error(`请求 ${number} 失败，查询内容: ${query}`);
+                            textField.innerText = "请求错误或翻译失败";
+                        }
+                    }
+                },
+
+                clearText(number) {
+                    const inputField = document.getElementById(`input${number}`);
+                    const textField = document.getElementById(`text${number}`);
+                    inputField.value = "";
+                    textField.innerText = ""; // 清空翻译结果
+                },
+
+                async translateAll(service) {
+                    let delay = 800; // 初始延迟时间
+
+                    for (let i = 0; i < this.inputGroups.length; i++) {
+                        const groupId = this.inputGroups[i].id;
+                        const startTime = performance.now();
+                        console.log(`开始处理请求 ${groupId}`);
+                        
+                        await this.translateText(groupId, service);
+                        
+                        const endTime = performance.now();
+                        const responseTime = endTime - startTime;
+
+                        if (service === 'youdao') {
+                            // 根据上一次请求的响应时间动态调整延迟时间
+                            delay = Math.max(800, responseTime + 200);
+                            console.log(`请求 ${groupId} 响应时间为 ${responseTime} 毫秒，设置延迟为 ${delay} 毫秒`);
+                        }
+                        
+                        // 确保每次请求后都有一定的延迟
+                        if (i < this.inputGroups.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                },
+
+                addInputGroup() {
+                    this.inputGroups.push({ id: this.nextId });
+                    this.nextId++;
+                },
+
+                toggleIndexFormat() {
+                    this.startFromOne = !this.startFromOne; // 切换序号格式
+                },
+
+                removeInputGroup(id) {
+                    this.inputGroups = this.inputGroups.filter(group => group.id !== id);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
